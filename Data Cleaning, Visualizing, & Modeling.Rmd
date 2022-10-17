@@ -1,0 +1,621 @@
+---
+title: "Data Cleaning, Visualizing, & Modeling"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# setwd("~/Desktop/Columbia/Frameworks & Methods II/Project")
+```
+
+Loading necessary libraries:
+```{r}
+library(RedditExtractoR)
+library(data.table)
+library(dplyr)
+library(tidyquant)
+library(gtrendsR)
+library(stringr)
+library(tm)
+library(ggplot2)
+library(tidytext)
+library(lexicon)
+library(tidyverse)
+```
+
+Loading the data and encoding foreign characters:
+```{r}
+data = fread('ETH Complete Dataframe.csv', header = T, encoding = "UTF-8")
+```
+
+Adding a unique index ID:
+```{r}
+data = tibble::rowid_to_column(data, "index")
+```
+
+Changing the date column to a date format, and sorting the data by date:
+```{r}
+data$date = as.Date(data$date, '%Y-%m-%d')
+
+data <- data %>%
+  arrange(by_group = "comments.date")
+```
+
+A little sneak peak of the comment statistics:
+```{r}
+data %>%
+  dplyr::select(comment) %>%
+  mutate(characters = nchar(comment),
+         words = str_count(comment, pattern = '\\S+'),
+         sentences = str_count(comment, pattern="[A-Za-z,;'\"\\s]+[^.!?]*[.?!]")) %>%
+  summarize_at(c('characters','words','sentences'), .funs = mean, na.rm = T)
+```
+
+Cleaning data by column, starting with the comment column:
+```{r}
+data$comment <- data$comment %>%
+  tolower()
+data$comment <- gsub(pattern='http[[:alnum:][:punct:]]*', replacement = '', data$comment)
+data$comment <- removeNumbers(data$comment)
+data$comment <- removePunctuation(data$comment)
+data$comment <- str_replace_all(data$comment, "\002", " ")
+data$comment <- str_replace_all(data$comment, "\017", " ")
+data$comment <- str_replace_all(data$comment, "\030", " ")
+data$comment <- str_replace_all(data$comment, "\031", " ")
+data$comment <- str_replace_all(data$comment, "\034", " ")
+data$comment <- str_replace_all(data$comment, "\035", " ")
+data$comment <- str_replace_all(data$comment, "\n", " ")
+data$comment <- str_trim(data$comment)
+data$comment <- gsub(paste0('\\b', tm::stopwords("english"), '\\b', collapse = '|'), '', data$comment)
+data$comment <- str_squish(data$comment)
+```
+
+```{r}
+data$threadTitle <- str_replace_all(data$threadTitle,"[^[:graph:]]", " ")
+data$threadTitle<- data$threadTitle %>%
+  tolower()
+data$threadTitle <- gsub(pattern='http[[:alnum:][:punct:]]*', replacement = '', data$threadTitle)
+data$threadTitle <- removeNumbers(data$threadTitle)
+data$threadTitle <- removePunctuation(data$threadTitle)
+data$threadTitle <- str_replace_all(data$threadTitle, "\002", " ")
+data$threadTitle <- str_replace_all(data$threadTitle, "\017", " ")
+data$threadTitle <- str_replace_all(data$threadTitle, "\030", " ")
+data$threadTitle <- str_replace_all(data$threadTitle, "\031", " ")
+data$threadTitle <- str_replace_all(data$threadTitle, "\034", " ")
+data$threadTitle <- str_replace_all(data$threadTitle, "\035", " ")
+data$threadTitle <- str_replace_all(data$threadTitle, "\n", " ")
+data$threadTitle <- str_trim(data$threadTitle)
+data$threadTitle <- gsub(paste0('\\b', tm::stopwords("english"), '\\b', collapse = '|'), '', data$threadTitle)
+data$threadTitle <- str_squish(data$threadTitle)
+```
+
+Despite using 'encoding = "UTF-8"', some rows in the threadText column are not able to be parsed to lower, so manually adjusting the columns, too.
+```{r}
+all(stri_enc_isutf8(data$threadText))
+
+data <- data %>% 
+  mutate(threadText = gsub("[^[:alnum:][:blank:]?&/\\-]", "", data$threadText)) %>%
+  rename(threadText = threadText)
+
+all(stri_enc_isutf8(data$threadText))
+
+data$threadText <- data$threadText %>%
+  tolower()
+data$threadText <- gsub(pattern='http[[:alnum:][:punct:]]*', replacement = '', data$threadText)
+data$threadText <- removeNumbers(data$threadText)
+data$threadText <- removePunctuation(data$threadText)
+data$threadText <- str_replace_all(data$threadText, "\002", " ")
+data$threadText <- str_replace_all(data$threadText, "\017", " ")
+data$threadText <- str_replace_all(data$threadText, "\030", " ")
+data$threadText <- str_replace_all(data$threadText, "\031", " ")
+data$threadText <- str_replace_all(data$threadText, "\034", " ")
+data$threadText <- str_replace_all(data$threadText, "\035", " ")
+data$threadText <- str_replace_all(data$threadText, "\n", " ")
+data$threadText <- str_trim(data$threadText)
+data$threadText <- gsub(paste0('\\b', tm::stopwords("english"), '\\b', collapse = '|'), '', data$threadText)
+data$threadText <- str_squish(data$threadText)
+```
+
+VISUALIZATION
+Taking a little sneak peak of the 'clean' data before the analysis.
+Visualizing the price volatility:
+```{r}
+data %>%
+  dplyr::select(date, price) %>%
+  group_by(date) %>%
+  summarise(price = mean(price)) %>%
+  ggplot(aes(x= date, y = price)) +
+  geom_line()
+```
+
+Visualizing the price and the frequency of Google searches for Ethereum:
+```{r}
+data %>%
+  select(date, price, hits) %>%
+  group_by(date) %>%
+  summarise(price = mean(price), hits = mean(hits)) %>%
+  mutate_at(c('price', 'hits'), ~(scale(.) %>% as.vector)) %>%
+  melt(id.vars = 'date') %>%
+  ggplot(aes(x = date, y = value, col = variable)) +
+  geom_line()
+```
+
+Visualizing the most common words in the comments column.
+```{r}
+data %>%
+  unnest_tokens(input = comment, output = word) %>%
+  dplyr::select(word) %>%
+  group_by(word) %>%
+  summarize(count = n()) %>%
+  ungroup() %>%
+  arrange(desc(count)) %>%
+  top_n(25) %>%
+  ggplot(aes(x = reorder(word, count), y = count, fill = count)) +
+  geom_col() +
+  xlab('words') +
+  coord_flip()
+```
+
+Visualizing the most common words in the threadTitle column.
+```{r}
+data %>%
+  unnest_tokens(input = threadTitle, output = word) %>%
+  dplyr::select(word) %>%
+  group_by(word) %>%
+  summarize(count = n()) %>%
+  ungroup() %>%
+  arrange(desc(count)) %>%
+  top_n(25) %>%
+  ggplot(aes(x = reorder(word, count), y = count, fill = count)) +
+  geom_col() +
+  xlab('words') +
+  coord_flip()
+```
+
+Visualizing the most common words in the threadText column.
+```{r}
+data %>%
+  unnest_tokens(input = threadText, output = word) %>%
+  dplyr::select(word) %>%
+  group_by(word) %>%
+  summarize(count = n()) %>%
+  ungroup() %>%
+  arrange(desc(count)) %>%
+  top_n(25) %>%
+  ggplot(aes(x = reorder(word, count), y = count, fill = count)) +
+  geom_col() +
+  xlab('words') +
+  coord_flip()
+```
+
+
+Sentiment Word Cloud for comments
+```{r}
+library(tidyr)
+library(wordcloud)
+wordcloudData_comment = 
+  data%>%
+  group_by(index)%>%
+  unnest_tokens(input = comment, output = word) %>%
+  ungroup()%>%
+  dplyr::select(index,word)%>%
+  anti_join(stop_words)%>%
+  inner_join(get_sentiments('bing'))%>%
+  ungroup()%>%
+  count(sentiment,word,sort=T)%>%
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0)%>%
+  data.frame()
+rownames(wordcloudData_comment) = wordcloudData_comment[,'word']
+wordcloudData_comment = wordcloudData_comment[,c('positive','negative')]
+set.seed(617)
+comparison.cloud(term.matrix = wordcloudData_comment,scale = c(2,0.5),max.words = 200, rot.per=0)
+```
+
+Sentiment Word Cloud for threadTitle:
+```{r}
+wordcloudData_title = 
+  data%>%
+  group_by(index)%>%
+  unnest_tokens(input = threadTitle, output = word) %>%
+  ungroup()%>%
+  dplyr::select(index,word)%>%
+  anti_join(stop_words)%>%
+  inner_join(get_sentiments('bing'))%>%
+  ungroup()%>%
+  count(sentiment,word,sort=T)%>%
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0)%>%
+  data.frame()
+rownames(wordcloudData_title) = wordcloudData_title[,'word']
+wordcloudData_title = wordcloudData_title[,c('positive','negative')]
+set.seed(617)
+comparison.cloud(term.matrix = wordcloudData_title,scale = c(2,0.5),max.words = 200, rot.per=0)
+```
+
+Sentiment Word Cloud for threadTextL
+```{r}
+wordcloudData_text = 
+  data%>%
+  group_by(index)%>%
+  unnest_tokens(input = threadText, output = word) %>%
+  ungroup()%>%
+  dplyr::select(index,word)%>%
+  anti_join(stop_words)%>%
+  inner_join(get_sentiments('bing'))%>%
+  ungroup()%>%
+  count(sentiment,word,sort=T)%>%
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0)%>%
+  data.frame()
+rownames(wordcloudData_text) = wordcloudData_text[,'word']
+wordcloudData_text = wordcloudData_text[,c('positive','negative')]
+set.seed(617)
+comparison.cloud(term.matrix = wordcloudData_text,scale = c(2,0.5),max.words = 200, rot.per=0)
+```
+
+Sentiment Score
+afinn
+```{r}
+data %>%
+  dplyr::select(index, comment)%>%
+  group_by(index)%>%
+  unnest_tokens(output=word, input=comment)%>%
+  inner_join(get_sentiments('afinn'))%>%
+  summarize(sentiment_score_afinn = mean(value))%>%
+  ungroup()%>%
+  summarize(min=min(sentiment_score_afinn),
+            max=max(sentiment_score_afinn),
+            median=median(sentiment_score_afinn),
+            mean=mean(sentiment_score_afinn))
+```
+
+```{r}
+data %>%
+  dplyr::select(index, comment)%>%
+  group_by(index)%>%
+  unnest_tokens(output=word, input=comment)%>%
+  inner_join(get_sentiments('afinn'))%>%
+  summarize(sentiment_score_afinn = mean(value))%>%
+  ungroup()%>%
+  ggplot(aes(x=sentiment_score_afinn,fill=sentiment_score_afinn>0))+
+  geom_histogram(binwidth = 0.3)+
+  scale_x_continuous(breaks=seq(-5,5,1))+
+  scale_fill_manual(values=c('tomato','seagreen'))+
+  guides(fill=F)
+```
+
+```{r}
+sentiment_score_afinn = data %>%
+  dplyr::select(index, comment)%>%
+  group_by(index)%>%
+  unnest_tokens(output=word,input=comment)%>%
+  inner_join(get_sentiments('afinn'))%>%
+  summarize(senti_score_afinn = mean(value)) %>%
+  ungroup()
+```
+
+Senticnet
+```{r}
+data %>%
+  dplyr::select(index, comment)%>%
+  group_by(index)%>%
+  unnest_tokens(output=word,input=comment)%>%
+  inner_join(hash_sentiment_senticnet, by = c('word' = 'x'))%>%
+  summarize(sentiment_score_senticnet = mean(y))%>%
+  ungroup() %>%
+  summarize(min=min(sentiment_score_senticnet),
+            max=max(sentiment_score_senticnet),
+            median=median(sentiment_score_senticnet),
+            mean=mean(sentiment_score_senticnet))
+```
+
+```{r}
+data %>%
+  dplyr::select(index, comment)%>%
+  group_by(index)%>%
+  unnest_tokens(output=word,input=comment)%>%
+  inner_join(hash_sentiment_senticnet, by = c('word' = 'x'))%>%
+  summarize(sentiment_score_senticnet = mean(y))%>%
+  ungroup() %>%
+  ggplot(aes(x=sentiment_score_senticnet,fill=sentiment_score_senticnet>0))+
+  geom_histogram(binwidth = 0.05)+
+  scale_x_continuous(breaks=seq(-5,5,1))+
+  scale_fill_manual(values=c('tomato','seagreen'))+
+  guides(fill=F)
+```
+
+```{r}
+sentiment_score_senticnet = data %>%
+  dplyr::select(index, comment)%>%
+  group_by(index)%>%
+  unnest_tokens(output=word,input=comment)%>%
+  inner_join(hash_sentiment_senticnet, by = c('word' = 'x'))%>%
+  summarize(senti_score_scentic = mean(y))%>%
+  ungroup()
+```
+
+loughran_mcdonald
+```{r}
+data %>%
+  dplyr::select(index, comment)%>%
+  group_by(index)%>%
+  unnest_tokens(output=word,input=comment)%>%
+  inner_join(hash_sentiment_loughran_mcdonald, by = c('word' = 'x'))%>%
+  summarize(sentiment_score_mcd = mean(y))%>%
+  ungroup() %>%
+  summarize(min=min(sentiment_score_mcd),
+            max=max(sentiment_score_mcd),
+            median=median(sentiment_score_mcd),
+            mean=mean(sentiment_score_mcd))
+```
+
+```{r}
+data %>%
+  dplyr::select(index, comment)%>%
+  group_by(index)%>%
+  unnest_tokens(output=word,input=comment)%>%
+  inner_join(hash_sentiment_loughran_mcdonald, by = c('word' = 'x'))%>%
+  summarize(sentiment_score_mcd = mean(y))%>%
+  ungroup() %>%
+  ggplot(aes(x=sentiment_score_mcd,fill=sentiment_score_mcd>0))+
+  geom_histogram(binwidth = 0.4)+
+  scale_x_continuous(breaks=seq(-5,5,1))+
+  scale_fill_manual(values=c('tomato','seagreen'))+
+  guides(fill=F)
+```
+
+```{r}
+sentiment_score_mcdonald = data %>%
+  dplyr::select(index, comment)%>%
+  group_by(index)%>%
+  unnest_tokens(output=word,input=comment)%>%
+  inner_join(hash_sentiment_loughran_mcdonald, by = c('word' = 'x'))%>%
+  summarize(senti_score_mcd = mean(y))%>%
+  ungroup()
+```
+
+Grouping it all together:
+```{r}
+sentiment_data = data %>%
+  merge(sentiment_score_afinn, by = 'index', all = TRUE) %>%
+  merge(sentiment_score_senticnet, by = 'index', all = TRUE) %>%
+  merge(sentiment_score_mcdonald, by = 'index', all = TRUE)
+
+sentiment_data$senti_score_afinn[is.na(sentiment_data$senti_score_afinn)] = 0
+sentiment_data$senti_score_scentic[is.na(sentiment_data$senti_score_scentic)] = 0
+sentiment_data$senti_score_mcd[is.na(sentiment_data$senti_score_mcd)] = 0
+```
+
+PREDICTIVE MODELING
+```{r}
+library(tm)
+library(SnowballC)
+library(magrittr)
+
+corpus = Corpus(VectorSource(data$comment))
+corpus = 
+  corpus%>%
+  tm_map(content_transformer(tolower))%>%
+  tm_map(content_transformer(FUN = function(x)gsub(pattern = 'http[[:alnum:][:punct:]]*', replacement = ' ',x = x)))%>%
+  tm_map(removePunctuation)%>%
+  tm_map(removeWords, c(stopwords('english'),'eth','ethereum','vitalik','buterin','s','l','im','t'))
+
+dict = findFreqTerms(DocumentTermMatrix(Corpus(VectorSource(data$comment))),lowfreq = 0)
+dict_corpus = Corpus(VectorSource(dict))
+
+corpus = 
+  corpus %>%
+  tm_map(stemDocument)%>%
+  tm_map(stripWhitespace)
+
+dtm = DocumentTermMatrix(corpus)
+xdtm = removeSparseTerms(dtm,sparse = 0.95)
+xdtm = as.data.frame(as.matrix(xdtm))
+colnames(xdtm) = stemCompletion(x = colnames(xdtm),dictionary = dict_corpus,type = 'prevalent')
+colnames(xdtm) = make.names(colnames(xdtm))
+```
+
+LSA
+```{r}
+library(lsa)
+
+clusters = lsa(xdtm)
+# lsa decomposes data into three matrices. The term matrix contains the dimensions from svd
+clusters$tk = as.data.frame(clusters$tk)
+colnames(clusters$tk) = paste0("dim",1:9)
+head(clusters$tk)
+```
+
+LSA only 
+```{r}
+data_lsa = cbind(index = data$index, price = data$price, clusters$tk)
+
+data_lsa = drop_na(data_lsa)
+
+set.seed(617)
+split = sample(1:nrow(data_lsa),size = 0.7*nrow(data_lsa))
+train = data_lsa[split,]
+test = data_lsa[-split,]
+```
+
+Linear Regression
+```{r}
+model_lm = lm(price~.-index,train)
+pred_lm = predict(model_lm,newdata = test)
+rmse_lm = sqrt(mean((pred_lm-test$price)^2)) ;rmse_lm
+```
+
+Random Forest
+```{r}
+library(randomForest)
+set.seed(617)
+forest = randomForest(price ~.-index,data=train,ntree = 200)
+pred_tree = predict(forest,newdata=test)
+rmse_forest = sqrt(mean((pred_tree-test$price)^2)); rmse_forest
+```
+
+XGBoost
+```{r}
+notinput <- names(train) %in% c('index','price')
+train_input <- train[!notinput]
+test_input <- test[!notinput]
+
+```
+
+```{r}
+library(xgboost); library(caret)
+set.seed(617)
+tune_nrounds = xgb.cv(data=as.matrix(train_input), 
+                      label = train$price,
+                      nrounds=250,
+                      nfold = 5,
+                      verbose = 0)
+```
+
+```{r}
+which.min(tune_nrounds$evaluation_log$test_rmse_mean)
+```
+
+```{r}
+xgboost2= xgboost(data=as.matrix(train_input), 
+                  label = train$price,
+                  nrounds=17,
+                  verbose = 0)
+pred_xg = predict(xgboost2, 
+               newdata=as.matrix(test_input))
+rmse_xgboost = sqrt(mean((pred_xg - test$price)^2)); rmse_xgboost
+```
+
+Table of RMSE Scores
+```{r}
+data.frame(models = c('Linear regression', 'Random Forest','XGBoost'), RMSE = c(rmse_lm, rmse_forest, rmse_xgboost))
+
+```
+
+```{r}
+data_with_pred_1 = data.frame(test, predicted_price = pred_xg)
+```
+
+```{r}
+final_test_data_1 = merge(data, data_with_pred_1, by = c('index', 'price'))
+
+final_test_data_1 %>%
+  group_by(date) %>%
+  summarise(price = mean(price), predicted_price = mean(predicted_price)) %>%
+  melt(id.vars = 'date') %>%
+  ggplot(aes(x = date, y = value, color = variable)) +
+  geom_line()
+```
+
+Prediction using all variables:
+```{r}
+data_prediction = cbind(index = data$index, price = data$price, comment_score = data$commentScore, clusters$tk, afinn = sentiment_data$senti_score_afinn, senti = sentiment_data$senti_score_scentic, mcd = sentiment_data$senti_score_mcd, goog = data$hits)
+
+data_prediction = drop_na(data_prediction)
+
+set.seed(617)
+split = sample(1:nrow(data_prediction),size = 0.7*nrow(data_prediction))
+train_new = data_prediction[split,]
+test_new = data_prediction[-split,]
+```
+
+Linear Regression
+```{r}
+model_lm2 = lm(price~.-index,train_new)
+pred_lm2 = predict(model_lm2,newdata = test_new)
+rmse_lm2 = sqrt(mean((pred_lm2-test_new$price)^2))
+rmse_lm2
+```
+
+Random Forest
+```{r}
+library(randomForest)
+set.seed(617)
+forest2 = randomForest(price ~.-index,data=train_new,ntree = 200)
+pred_tree2 = predict(forest2,newdata=test_new)
+rmse_forest2 = sqrt(mean((pred_tree2-test_new$price)^2))
+rmse_forest2
+```
+
+XGBoost
+```{r}
+notinput <- names(train) %in% c('index','price')
+train_input <- train_new[!notinput]
+test_input <- test_new[!notinput]
+```
+
+```{r}
+library(xgboost)
+library(caret)
+set.seed(617)
+tune_nrounds = xgb.cv(data=as.matrix(train_input), 
+                      label = train_new$price,
+                      nrounds=250,
+                      nfold = 5,
+                      verbose = 0)
+```
+
+```{r}
+which.min(tune_nrounds$evaluation_log$test_rmse_mean)
+```
+
+```{r}
+xgboost3 = xgboost(data=as.matrix(train_input), 
+                  label = train_new$price,
+                  nrounds=21,
+                  verbose = 0)
+
+pred_xg2 = predict(xgboost3,
+                   newdata=as.matrix(test_input))
+
+rmse_xgboost2 = sqrt(mean((pred_xg2 - test_new$price)^2))
+rmse_xgboost2
+```
+
+Table of RMSE Scores
+```{r}
+data.frame(models = c('Linear regression', 'Random Forest','XGBoost'), RMSE = c(rmse_lm2, rmse_forest2, rmse_xgboost2))
+```
+
+```{r}
+data_with_pred2 = data.frame(test_new, predicted_price = pred_xg2)
+```
+
+```{r}
+final_test_data2 = merge(data, data_with_pred2, by = c('index', 'price'))
+
+final_test_data2 %>%
+  group_by(date) %>%
+  summarise(price = mean(price), predicted_price_min = min(predicted_price), predicted_price_max = max(predicted_price)) %>%
+  ggplot(aes(x = date)) +
+  geom_line(aes(y = price), color = 'darkred') +
+  geom_line(aes(y = predicted_price_min), color = 'steelblue')  
+  geom_line(aes(y = predicted_price_max), color = 'green')
+```
+
+```{r}
+final_test_data2 %>%
+  group_by(date) %>%
+  summarise(price = mean(price), predicted_price = mean(predicted_price)) %>%
+  melt(id.vars = 'date') %>%
+  ggplot(aes(x = date, y = value, color = variable)) +
+  geom_line()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

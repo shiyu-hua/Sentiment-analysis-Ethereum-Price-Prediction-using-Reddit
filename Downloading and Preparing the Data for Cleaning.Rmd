@@ -1,0 +1,582 @@
+---
+title: "1. Downloading and Preparing the Data for Cleaning"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# setwd("~/Desktop/Columbia/Frameworks & Methods II/Project")
+```
+
+```{r}
+library(lubridate)
+library(devtools)
+library(RedditExtractoR)
+library(data.table)
+library(dplyr)
+library(tidyquant)
+library(gtrendsR)
+library(stringr)
+library(tm)
+library(ggplot2)
+library(tidytext)
+library(mice)
+```
+
+DOWNLOADING DATA AND PREPARING DATA FOR CLEANING
+
+Downloading Reddit data - this was done twice, on February 2nd, and on April 18th. As the data one is able to download using the API is only for a month (at least on all of our laptops), we had a gap for the period of March 2nd to March 17th, which we aimed to fill using alternative methods.
+
+Therefore, the three datasets are for the following periods:
+  1. February 2nd, 2022 - March 1st, 2022;
+  2. March 2nd, 2022 - March 17th, 2022 (using an alternative method);
+  3. March 18th, 2022 - April 18th, 2022.
+
+For 1 and 3, find the code used below:
+```{r}
+eth <- find_thread_urls(subreddit = "Ethereum", sort_by = "new", period = "month") # Downloads most recent posts going back one month from today.
+eth_content <- get_thread_content(eth$url)
+
+str(eth_content)
+```
+
+Preparing the data for analysis.
+Step 1: separating the list of data frames to separate data frames.
+```{r}
+threads <- eth_content[-2];
+comments <- eth_content[-1];
+
+threads <- as.data.frame(threads)
+comments <- as.data.frame(comments)
+
+str(threads)
+str(comments)
+```
+
+Step 2: dropping unnecessary columns.
+```{r}
+comments <- comments %>% select(c("comments.url", "comments.date", "comments.score", "comments.comment"))
+```
+
+Step 3: combining the two data frames into one for easier cleaning and analysis using URL as the unique identifier.
+```{r}
+comments <- comments %>% mutate(threads.title = threads$threads.title[match(comments$comments.url, threads$threads.url)])
+
+comments <- comments %>% mutate(threads.text = threads$threads.text[match(comments$comments.url, threads$threads.url)])
+
+comments <- comments %>% mutate(threads.score = threads$threads.score[match(comments$comments.url, threads$threads.url)])
+```
+
+Saving the files as CSVs:
+```{r}
+# fwrite(comments, 'ETH.csv')
+```
+
+
+
+SECOND DATASET
+For the second period of the dataset, the following code was used:
+```{r}
+devtools::install_github("https://github.com/nathancunn/pushshiftR", force = TRUE)
+```
+
+I'm sure a for loop or couple would have been very useful here, but I am rather uncomfortable writing them in R as opposed to Python, so I just edited the code manually:
+
+03/02
+```{r}
+eth_sub_0302 = pushshiftR::getPushshiftData(postType = "submission",
+                                            size = 1000,
+                                            after = "1646179200",
+                                            before = "1646265600",
+                                            subreddit = "Ethereum")
+
+eth_com_0302 = pushshiftR::getPushshiftData(postType = "comment",
+                                        size = 1000,
+                                        after = "1646179200",
+                                        before = "1646265600",
+                                        subreddit = "Ethereum")
+
+eth_sub_0302$created_utc <- as_date(as_datetime(eth_sub_0302$created_utc))
+eth_sub_0302$created_utc
+
+eth_com_0302$created_utc <- as_date(as_datetime(eth_com_0302$created_utc))
+eth_com_0302$created_utc
+```
+
+03/03
+```{r}
+eth_sub_0303 = pushshiftR::getPushshiftData(postType = "submission",
+                                        size = 1000,
+                                        after = "1646265600",
+                                        before = "1646352000",
+                                        subreddit = "Ethereum")
+
+eth_com_0303 = pushshiftR::getPushshiftData(postType = "comment",
+                                        size = 1000,
+                                        after = "1646265600",
+                                        before = "1646352000",
+                                        subreddit = "Ethereum")
+
+eth_sub_0303$created_utc <- as_date(as_datetime(eth_sub_0303$created_utc))
+eth_sub_0303$created_utc
+
+eth_com_0303$created_utc <- as_date(as_datetime(eth_com_0303$created_utc))
+eth_com_0303$created_utc
+```
+
+03/04
+```{r}
+eth_sub_0304 = pushshiftR::getPushshiftData(postType = "submission",
+                                        size = 1000,
+                                        after = "1646352000",
+                                        before = "1646438400",
+                                        subreddit = "Ethereum")
+
+eth_com_0304 = pushshiftR::getPushshiftData(postType = "comment",
+                                        size = 1000,
+                                        after = "1646352000",
+                                        before = "1646438400",
+                                        subreddit = "Ethereum")
+
+eth_sub_0304$created_utc <- as_date(as_datetime(eth_sub_0304$created_utc))
+eth_sub_0304$created_utc
+
+eth_com_0304$created_utc <- as_date(as_datetime(eth_com_0304$created_utc))
+eth_com_0304$created_utc
+```
+
+03/05
+```{r}
+eth_sub_0305 = pushshiftR::getPushshiftData(postType = "submission",
+                                        size = 1000,
+                                        after = "1646438400",
+                                        before = "1646524800",
+                                        subreddit = "Ethereum")
+
+eth_com_0305 = pushshiftR::getPushshiftData(postType = "comment",
+                                        size = 1000,
+                                        after = "1646438400",
+                                        before = "1646524800",
+                                        subreddit = "Ethereum")
+
+eth_sub_0305$created_utc <- as_date(as_datetime(eth_sub_0305$created_utc))
+eth_sub_0305$created_utc
+
+eth_com_0305$created_utc <- as_date(as_datetime(eth_com_0305$created_utc))
+eth_com_0305$created_utc
+```
+
+03/06
+```{r}
+eth_sub_0306 = pushshiftR::getPushshiftData(postType = "submission",
+                                        size = 1000,
+                                        after = "1646524800",
+                                        before = "1646611200",
+                                        subreddit = "Ethereum")
+
+eth_com_0306 = pushshiftR::getPushshiftData(postType = "comment",
+                                        size = 1000,
+                                        after = "1646524800",
+                                        before = "1646611200",
+                                        subreddit = "Ethereum")
+
+eth_sub_0306$created_utc <- as_date(as_datetime(eth_sub_0306$created_utc))
+eth_sub_0306$created_utc
+
+eth_com_0306$created_utc <- as_date(as_datetime(eth_com_0306$created_utc))
+eth_com_0306$created_utc
+```
+
+03/07
+```{r}
+eth_sub_0307 = pushshiftR::getPushshiftData(postType = "submission",
+                                        size = 1000,
+                                        after = "1646611200",
+                                        before = "1646697600",
+                                        subreddit = "Ethereum")
+
+eth_com_0307 = pushshiftR::getPushshiftData(postType = "comment",
+                                        size = 1000,
+                                        after = "1646611200",
+                                        before = "1646697600",
+                                        subreddit = "Ethereum")
+
+eth_sub_0307$created_utc <- as_date(as_datetime(eth_sub_0307$created_utc))
+eth_sub_0307$created_utc
+
+eth_com_0307$created_utc <- as_date(as_datetime(eth_com_0307$created_utc))
+eth_com_0307$created_utc
+```
+
+03/08
+```{r}
+eth_sub_0308 = pushshiftR::getPushshiftData(postType = "submission",
+                                        size = 1000,
+                                        after = "1646697600",
+                                        before = "1646784000",
+                                        subreddit = "Ethereum")
+
+eth_com_0308 = pushshiftR::getPushshiftData(postType = "comment",
+                                        size = 1000,
+                                        after = "1646697600",
+                                        before = "1646784000",
+                                        subreddit = "Ethereum")
+
+eth_sub_0308$created_utc <- as_date(as_datetime(eth_sub_0308$created_utc))
+eth_sub_0308$created_utc
+
+eth_com_0308$created_utc <- as_date(as_datetime(eth_com_0308$created_utc))
+eth_com_0308$created_utc
+```
+
+03/09
+```{r}
+eth_sub_0309 = pushshiftR::getPushshiftData(postType = "submission",
+                                        size = 1000,
+                                        after = "1646784000",
+                                        before = "1646870400",
+                                        subreddit = "Ethereum")
+
+eth_com_0309 = pushshiftR::getPushshiftData(postType = "comment",
+                                        size = 1000,
+                                        after = "1646784000",
+                                        before = "1646870400",
+                                        subreddit = "Ethereum")
+
+eth_sub_0309$created_utc <- as_date(as_datetime(eth_sub_0309$created_utc))
+eth_sub_0309$created_utc
+
+eth_com_0309$created_utc <- as_date(as_datetime(eth_com_0309$created_utc))
+eth_com_0309$created_utc
+```
+
+03/10
+```{r}
+eth_sub_0310 = pushshiftR::getPushshiftData(postType = "submission",
+                                        size = 1000,
+                                        after = "1646870400",
+                                        before = "1646956800",
+                                        subreddit = "Ethereum")
+
+eth_com_0310 = pushshiftR::getPushshiftData(postType = "comment",
+                                        size = 1000,
+                                        after = "1646870400",
+                                        before = "1646956800",
+                                        subreddit = "Ethereum")
+
+eth_sub_0310$created_utc <- as_date(as_datetime(eth_sub_0310$created_utc))
+eth_sub_0310$created_utc
+
+eth_com_0310$created_utc <- as_date(as_datetime(eth_com_0310$created_utc))
+eth_com_0310$created_utc
+```
+
+03/11
+```{r}
+eth_sub_0311 = pushshiftR::getPushshiftData(postType = "submission",
+                                        size = 1000,
+                                        after = "1646956800",
+                                        before = "1647043200",
+                                        subreddit = "Ethereum")
+
+eth_com_0311 = pushshiftR::getPushshiftData(postType = "comment",
+                                        size = 1000,
+                                        after = "1646956800",
+                                        before = "1647043200",
+                                        subreddit = "Ethereum")
+
+eth_sub_0311$created_utc <- as_date(as_datetime(eth_sub_0311$created_utc))
+eth_sub_0311$created_utc
+
+eth_com_0311$created_utc <- as_date(as_datetime(eth_com_0311$created_utc))
+eth_com_0311$created_utc
+```
+
+03/12
+```{r}
+eth_sub_0312 = pushshiftR::getPushshiftData(postType = "submission",
+                                        size = 1000,
+                                        after = "1647043200",
+                                        before = "1647129600",
+                                        subreddit = "Ethereum")
+
+eth_com_0312 = pushshiftR::getPushshiftData(postType = "comment",
+                                        size = 1000,
+                                        after = "1647043200",
+                                        before = "1647129600",
+                                        subreddit = "Ethereum")
+
+eth_sub_0312$created_utc <- as_date(as_datetime(eth_sub_0312$created_utc))
+eth_sub_0312$created_utc
+
+eth_com_0312$created_utc <- as_date(as_datetime(eth_com_0312$created_utc))
+eth_com_0312$created_utc
+```
+
+03/13
+```{r}
+eth_sub_0313 = pushshiftR::getPushshiftData(postType = "submission",
+                                        size = 1000,
+                                        after = "1647129600",
+                                        before = "1647216000",
+                                        subreddit = "Ethereum")
+
+eth_com_0313 = pushshiftR::getPushshiftData(postType = "comment",
+                                        size = 1000,
+                                        after = "1647129600",
+                                        before = "1647216000",
+                                        subreddit = "Ethereum")
+
+eth_sub_0313$created_utc <- as_date(as_datetime(eth_sub_0313$created_utc))
+eth_sub_0313$created_utc
+
+eth_com_0313$created_utc <- as_date(as_datetime(eth_com_0313$created_utc))
+eth_com_0313$created_utc
+```
+
+03/14
+```{r}
+eth_sub_0314 = pushshiftR::getPushshiftData(postType = "submission",
+                                        size = 1000,
+                                        after = "1647216000",
+                                        before = "1647302400",
+                                        subreddit = "Ethereum")
+
+eth_com_0314 = pushshiftR::getPushshiftData(postType = "comment",
+                                        size = 1000,
+                                        after = "1647216000",
+                                        before = "1647302400",
+                                        subreddit = "Ethereum")
+
+eth_sub_0314$created_utc <- as_date(as_datetime(eth_sub_0314$created_utc))
+eth_sub_0314$created_utc
+
+eth_com_0314$created_utc <- as_date(as_datetime(eth_com_0314$created_utc))
+eth_com_0314$created_utc
+```
+
+03/15
+```{r}
+eth_sub_0315 = pushshiftR::getPushshiftData(postType = "submission",
+                                        size = 1000,
+                                        after = "1647302400",
+                                        before = "1647388800",
+                                        subreddit = "Ethereum")
+
+eth_com_0315 = pushshiftR::getPushshiftData(postType = "comment",
+                                        size = 1000,
+                                        after = "1647302400",
+                                        before = "1647388800",
+                                        subreddit = "Ethereum")
+
+eth_sub_0315$created_utc <- as_date(as_datetime(eth_sub_0315$created_utc))
+eth_sub_0315$created_utc
+
+eth_com_0315$created_utc <- as_date(as_datetime(eth_com_0315$created_utc))
+eth_com_0315$created_utc
+```
+
+03/16
+```{r}
+eth_sub_0316 = pushshiftR::getPushshiftData(postType = "submission",
+                                        size = 1000,
+                                        after = "1647388800",
+                                        before = "1647475200",
+                                        subreddit = "Ethereum")
+
+eth_com_0316 = pushshiftR::getPushshiftData(postType = "comment",
+                                        size = 1000,
+                                        after = "1647388800",
+                                        before = "1647475200",
+                                        subreddit = "Ethereum")
+
+eth_sub_0316$created_utc <- as_date(as_datetime(eth_sub_0316$created_utc))
+eth_sub_0316$created_utc
+
+eth_com_0316$created_utc <- as_date(as_datetime(eth_com_0316$created_utc))
+eth_com_0316$created_utc
+```
+
+03/17
+```{r}
+eth_sub_0317 = pushshiftR::getPushshiftData(postType = "submission",
+                                        size = 1000,
+                                        after = "1647475200",
+                                        before = "1647561600",
+                                        subreddit = "Ethereum")
+
+eth_com_0317 = pushshiftR::getPushshiftData(postType = "comment",
+                                        size = 1000,
+                                        after = "1647475200",
+                                        before = "1647561600",
+                                        subreddit = "Ethereum")
+
+eth_sub_0317$created_utc <- as_date(as_datetime(eth_sub_0317$created_utc))
+eth_sub_0317$created_utc
+
+eth_com_0317$created_utc <- as_date(as_datetime(eth_com_0317$created_utc))
+eth_com_0317$created_utc
+```
+
+Merging all of the data frames into comment and thread data frames:
+```{r}
+comments = rbind(eth_com_0302,
+                 eth_com_0303,
+                 eth_com_0304,
+                 eth_com_0305,
+                 eth_com_0306,
+                 eth_com_0307,
+                 eth_com_0308,
+                 eth_com_0309,
+                 eth_com_0310,
+                 eth_com_0311,
+                 eth_com_0312,
+                 eth_com_0313,
+                 eth_com_0314,
+                 eth_com_0315,
+                 eth_com_0316,
+                 eth_com_0317)
+
+threads = rbind(eth_sub_0302,
+                eth_sub_0303,
+                eth_sub_0304,
+                eth_sub_0305,
+                eth_sub_0306,
+                eth_sub_0307,
+                eth_sub_0308,
+                eth_sub_0309,
+                eth_sub_0310,
+                eth_sub_0311,
+                eth_sub_0312,
+                eth_sub_0313,
+                eth_sub_0314,
+                eth_sub_0315,
+                eth_sub_0316,
+                eth_sub_0317)
+```
+
+Merging the two data frames by id and parent_id:
+```{r}
+comments$id <- str_sub(comments$parent_id, 4, -1)
+
+comments <- comments %>% mutate(threads_title = threads$title[match(comments$id, threads$id)])
+comments <- comments %>% mutate(threads_text = threads$selftext[match(comments$id, threads$id)])
+
+eth_0302_0317 <- comments %>% select(c("created_utc", "threads_title", "threads_text", "body"))
+```
+
+Removing NAs:
+```{r}
+eth_0302_0317$body <- eth_0302_0317$body %>% na_if("[removed]")
+eth_0302_0317 <- na.omit(eth_0302_0317)
+```
+
+Saving the file as a CSV:
+```{r}
+#fwrite(eth_0302_0317, 'ETH March Gap Dataframe.csv')
+```
+
+
+
+MERGING THE DATA
+Finally, merging all of the datasets together:
+```{r}
+data1 = read.csv("ETH 1.csv")
+data2 = read.csv("ETH 2.csv")
+data3 = read.csv("ETH 3.csv")
+```
+
+Issues with the datasets:
+  1) The date format of data1 and data3 differs from that of data2, yet each of the variables are characters.
+  2) data2 is missing a comments.url column, which will be removed, as it was solely used for merging the threads to the comments.
+  3) data 2 is missing comments.score and threads.score columns, data for which will me imputed using the MICE package.
+
+Fixing the date issue:
+```{r}
+data1$comments.date <- as.Date(data1$comments.date, format =  "%m/%d/%y", tryFormats = "%Y-%m-%d")
+data3$comments.date <- as.Date(data3$comments.date, format =  "%m/%d/%y", tryFormats = "%Y-%m-%d")
+
+data2$created_utc <- as_date(data2$created_utc)
+```
+
+Removing the url columns from both data1 and data2:
+```{r}
+data1 <- data1 %>% select(!"comments.url")
+data3 <- data3 %>% select(!"comments.url")
+```
+
+Merging the data sets into one data frame:
+```{r}
+# Renaming columns
+colnames(data1) <- c("date", "commentScore", "comment", "threadTitle", "threadText", "threadScore")
+colnames(data3) <- c("date", "commentScore", "comment", "threadTitle", "threadText", "threadScore")
+
+colnames(data2) <- c("date", "threadTitle", "threadText", "comment")
+
+# Adding two empty columns for commentScore and threadScore in data2:
+data2[, c('commentScore', 'threadScore')] = NA
+
+# Reordering columns
+data1 <- data1[, c("date", "comment", "commentScore", "threadTitle", "threadText", "threadScore")]
+data3 <- data2[, c("date", "comment", "commentScore", "threadTitle", "threadText", "threadScore")]
+
+data2 <- data2[, c("date", "comment", "commentScore", "threadTitle", "threadText", "threadScore")]
+
+data <- rbind(data1,
+              data2,
+              data3)
+```
+
+Imputing the missing variables:
+```{r}
+set.seed(10025)
+data = mice::complete(mice(data, use.matcher=T))
+```
+
+
+
+Downloading the price of ETH for the period:
+```{r}
+eth = c("ETH-USD")
+
+eth_price = tq_get(eth,
+                   get = 'stock.prices',
+                   from = "2022-02-02",
+                   to = "2022-04-18")
+
+eth_price = eth_price %>%
+  select(-"symbol")
+
+eth_price = as.data.frame(eth_price)
+```
+
+Matching the price of ETH to the comments by date:
+```{r}
+data <- data %>% mutate(price = eth_price$adjusted[match(data$date, eth_price$date)])
+```
+
+Downloading Google Trends data for ETH:
+```{r}
+thaler_google = gtrends(keyword = 'Ethereum', geo = c('US'), time = '2022-02-02 2022-04-18')
+```
+
+Selecting the relevant data frame for analysis, i.e. interest_over_time:
+```{r}
+thaler_google <- thaler_google[1]
+thaler_google <- as.data.frame(thaler_google)
+```
+
+Matching the frequency of hits to the comments by date:
+```{r}
+thaler_google$interest_over_time.date <- as_date(thaler_google$interest_over_time.date)
+
+data <- data %>% mutate(hits = thaler_google$interest_over_time.hits[match(data$date, thaler_google$interest_over_time.date)])
+```
+
+Saving the merged and complete file as CSV to be used for cleaning:
+```{r}
+# fwrite(data, 'ETH Complete Dataframe.csv')
+```
